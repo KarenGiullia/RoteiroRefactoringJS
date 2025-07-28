@@ -1,6 +1,6 @@
 const { readFileSync } = require('fs');
 
-function gerarFaturaStr(fatura, pecas) {
+function criarFaturaCalculada(fatura, pecas) {
 
   function getPeca(apre) {
     return pecas[apre.id];
@@ -8,7 +8,6 @@ function gerarFaturaStr(fatura, pecas) {
 
   function calcularTotalApresentacao(apre) {
     let total = 0;
-
     switch (getPeca(apre).tipo) {
       case "tragedia":
         total = 40000;
@@ -26,7 +25,6 @@ function gerarFaturaStr(fatura, pecas) {
       default:
         throw new Error(`Peça desconhecida: ${getPeca(apre).tipo}`);
     }
-
     return total;
   }
 
@@ -38,31 +36,48 @@ function gerarFaturaStr(fatura, pecas) {
     return creditos;
   }
 
+  const resultado = {};
+  resultado.cliente = fatura.cliente;
+  resultado.apresentacoes = fatura.apresentacoes.map(apre => {
+    const peca = getPeca(apre);
+    const total = calcularTotalApresentacao(apre);
+    return {
+      peca,
+      audiencia: apre.audiencia,
+      total,
+      creditos: calcularCredito(apre)
+    };
+  });
+
+  resultado.totalFatura = resultado.apresentacoes.reduce((total, a) => total + a.total, 0);
+  resultado.totalCreditos = resultado.apresentacoes.reduce((total, a) => total + a.creditos, 0);
+
+  return resultado;
+}
+
+function gerarFaturaStr(dados) {
+
   function formatarMoeda(valor) {
     return new Intl.NumberFormat("pt-BR",
       { style: "currency", currency: "BRL",
         minimumFractionDigits: 2 }).format(valor / 100);
   }
 
-  let totalFatura = 0;
-  let creditos = 0;
-  let faturaStr = `Fatura ${fatura.cliente}\n`;
+  let faturaStr = `Fatura ${dados.cliente}\n`;
 
-  for (let apre of fatura.apresentacoes) {
-    let total = calcularTotalApresentacao(apre);
-
-    creditos += calcularCredito(apre);
-
-    faturaStr += `  ${getPeca(apre).nome}: ${formatarMoeda(total)} (${apre.audiencia} assentos)\n`;
-    totalFatura += total;
+  for (let apre of dados.apresentacoes) {
+    faturaStr += `  ${apre.peca.nome}: ${formatarMoeda(apre.total)} (${apre.audiencia} assentos)\n`;
   }
 
-  faturaStr += `Valor total: ${formatarMoeda(totalFatura)}\n`;
-  faturaStr += `Créditos acumulados: ${creditos} \n`;
+  faturaStr += `Valor total: ${formatarMoeda(dados.totalFatura)}\n`;
+  faturaStr += `Créditos acumulados: ${dados.totalCreditos} \n`;
   return faturaStr;
 }
 
 const faturas = JSON.parse(readFileSync('./faturas.json'));
 const pecas = JSON.parse(readFileSync('./pecas.json'));
-const faturaStr = gerarFaturaStr(faturas, pecas);
+
+const dadosCalculados = criarFaturaCalculada(faturas, pecas);
+const faturaStr = gerarFaturaStr(dadosCalculados);
+
 console.log(faturaStr);
